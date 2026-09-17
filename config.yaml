@@ -1,0 +1,624 @@
+# =====================================================================
+# RumenTwin-RL — master configuration
+# ---------------------------------------------------------------------
+# SYNTHETIC SIMULATION STUDY.
+# No real animal, sensor or experimental data is used anywhere in this
+# project. All parameter values below are *plausible ranges chosen for a
+# transparent proof-of-concept dynamical model*, NOT calibrated
+# physiological constants. They must not be used for veterinary
+# decision making.
+# =====================================================================
+
+project:
+  name: RumenTwin-RL
+  study_type: synthetic simulation study
+  version: "1.0.0"
+
+# ---------------------------------------------------------------------
+# Simulation clock
+# ---------------------------------------------------------------------
+simulation:
+  dt_minutes: 15            # Delta t of the discrete-time model
+  steps_per_day: 96         # 24 h / 15 min
+  episode_hours: 48         # default episode length (=> 192 steps)
+  start_hour: 0.0           # episodes start at midnight
+
+# ---------------------------------------------------------------------
+# Table 1 metadata: digital-twin state variables
+#   observable: is a synthetic sensor available for this variable?
+# ---------------------------------------------------------------------
+state_variables:
+  rumen_pH:
+    unit: "pH units"
+    min: 4.80
+    max: 7.40
+    default: 6.42
+    plausible_low: 5.50
+    plausible_high: 7.00
+    observable: true
+    description: "Bulk reticulo-rumen pH (bolus-equivalent)."
+  rumen_temperature:
+    unit: "degC"
+    min: 36.50
+    max: 42.50
+    default: 38.90
+    plausible_low: 38.00
+    plausible_high: 40.50
+    observable: true
+    description: "Reticulo-rumen temperature."
+  rumination_minutes:
+    unit: "min per 15-min step"
+    min: 0.0
+    max: 15.0
+    default: 5.20
+    plausible_low: 2.50
+    plausible_high: 8.50
+    observable: true
+    description: "Rumination time within the current step (x96 ~ min/day)."
+  dry_matter_intake:
+    unit: "kg DM per 15-min step"
+    min: 0.0
+    max: 1.60
+    default: 0.24
+    plausible_low: 0.0
+    plausible_high: 1.20
+    observable: true
+    description: "Dry matter consumed during the current step."
+  vfa_index:
+    unit: "dimensionless index [0,1]"
+    min: 0.0
+    max: 1.0
+    default: 0.42
+    plausible_low: 0.15
+    plausible_high: 0.85
+    observable: false
+    description: "Normalised total volatile fatty acid load (latent)."
+  lactate_index:
+    unit: "dimensionless index [0,1]"
+    min: 0.0
+    max: 1.0
+    default: 0.04
+    plausible_low: 0.0
+    plausible_high: 0.70
+    observable: false
+    description: "Normalised ruminal lactate accumulation (latent)."
+  milk_yield_proxy:
+    unit: "kg/day equivalent rate"
+    min: 0.0
+    max: 65.0
+    default: 33.0
+    plausible_low: 10.0
+    plausible_high: 55.0
+    observable: true
+    description: "Instantaneous milk production rate proxy."
+  hydration_index:
+    unit: "dimensionless index [0,1]"
+    min: 0.0
+    max: 1.0
+    default: 0.88
+    plausible_low: 0.55
+    plausible_high: 1.0
+    observable: true
+    description: "Normalised hydration status (water-intake proxy)."
+  heat_load:
+    unit: "dimensionless index [0,1]"
+    min: 0.0
+    max: 1.0
+    default: 0.12
+    plausible_low: 0.0
+    plausible_high: 0.95
+    observable: true
+    description: "Normalised thermal load (barn THI-equivalent index)."
+  health_risk:
+    unit: "dimensionless index [0,1]"
+    min: 0.0
+    max: 1.0
+    default: 0.05
+    plausible_low: 0.0
+    plausible_high: 1.0
+    observable: false
+    description: "Accumulated digestive-health risk score (latent)."
+
+# Latent auxiliary variables (not part of s_t proper, but part of the twin)
+auxiliary_variables:
+  concentrate_pool: "Rapidly fermentable carbohydrate pool in the rumen [0,1]"
+  buffer_pool: "Administered buffer still active in the rumen [0,1]"
+  saliva_buffer: "Rumination-derived buffering flux [0,1]"
+  forage_ratio: "Current forage fraction of the ration [0,1]"
+  low_pH_run: "Consecutive steps below the low-pH threshold"
+
+# ---------------------------------------------------------------------
+# Virtual population (hierarchical: population -> cow -> within-cow)
+# ---------------------------------------------------------------------
+population:
+  n_cows: 1000
+  split: {train: 0.70, validation: 0.15, test: 0.15}
+  # Population-level hyperparameters: [mean, sd, lower_clip, upper_clip]
+  hyper:
+    baseline_pH:              [6.42, 0.13, 6.05, 6.80]
+    concentrate_sensitivity:  [1.00, 0.22, 0.45, 1.85]
+    rumination_efficiency:    [1.00, 0.17, 0.50, 1.55]
+    acid_clearance:           [1.00, 0.20, 0.45, 1.70]
+    buffer_response:          [1.00, 0.25, 0.35, 1.80]
+    intake_capacity_kg_day:   [23.0, 2.60, 15.0, 31.0]
+    heat_sensitivity:         [1.00, 0.26, 0.35, 1.90]
+    recovery_ability:         [1.00, 0.20, 0.45, 1.70]
+    milk_potential_kg_day:    [34.0, 5.00, 18.0, 52.0]
+  # Correlation applied between selected traits (Gaussian copula-style)
+  trait_correlations:
+    milk_potential_kg_day__intake_capacity_kg_day: 0.55
+    baseline_pH__acid_clearance: 0.35
+    rumination_efficiency__acid_clearance: 0.30
+  # Within-cow stochastic variation (per-step process noise sd)
+  process_noise:
+    pH: 0.012
+    temperature: 0.030
+    rumination: 0.28
+    dry_matter_intake: 0.020
+    vfa: 0.006
+    lactate: 0.004
+    milk: 0.25
+
+# ---------------------------------------------------------------------
+# Feeding plan (baseline management)
+# ---------------------------------------------------------------------
+feeding:
+  meals_per_day: 3
+  meal_hours: [6.0, 12.0, 18.0]
+  meal_spread_steps: 3.2        # sd of the Gaussian intake profile
+  baseline_intake_fraction: 0.12 # fraction of daily DMI eaten outside meals
+  baseline_forage_ratio: 0.60
+  forage_ratio_min: 0.25
+  forage_ratio_max: 0.88
+
+# ---------------------------------------------------------------------
+# Physiology coefficients (Section 4 of the manuscript)
+# ---------------------------------------------------------------------
+physiology:
+  # --- inertia / relaxation rates (per step, in (0,1]) ---
+  alpha_pH: 0.17
+  alpha_vfa: 0.22
+  alpha_lactate: 0.16
+  alpha_rumination: 0.18
+  alpha_dmi: 0.35
+  alpha_temperature: 0.12
+  alpha_hydration: 0.10
+  alpha_milk: 0.05
+  # --- concentrate / fermentation pool ---
+  conc_pool_halflife_h: 2.0
+  conc_pool_gain: 0.225         # per kg DM concentrate per step
+  # --- VFA ---
+  vfa_intercept: 0.10
+  vfa_from_pool: 0.62
+  vfa_from_intake: 0.14
+  # --- reference operating point (balanced ration, phi = 0.60).
+  #     The pH balance equation (8) is written in DEVIATION form around this
+  #     point, so pH* equals the individual baseline pH exactly when the cow
+  #     is on the reference ration. This makes every coefficient below a
+  #     directly interpretable "pH units per unit deviation".
+  vfa_ref: 0.42
+  pool_ref: 0.25
+  saliva_ref: 0.58
+  # --- lactate (positive-feedback pathway towards SARA-like states) ---
+  lactate_pool_threshold: 0.62
+  lactate_gain: 1.30
+  lactate_pH_feedback: 1.60
+  lactate_pH_trigger: 5.95
+  lactate_clearance: 0.22
+  # --- rumination ---
+  rumination_max: 9.0           # min per 15-min step at maximum drive
+  rumination_forage_a: 0.22
+  rumination_forage_b: 0.60
+  rumination_heat_k: 0.55
+  rumination_pH_k: 0.55
+  rumination_pH_ref: 6.10
+  rumination_health_k: 0.40
+  saliva_gain: 1.0
+  # --- buffer ---
+  buffer_halflife_h: 2.25
+  # --- pH balance equation coefficients (deviation form) ---
+  pH_vfa: 1.60
+  pH_lactate: 1.50
+  pH_pool: 0.90
+  pH_saliva: 0.70
+  pH_buffer: 0.75
+  pH_forage: 0.60
+  pH_forage_ref: 0.60
+  pH_heat: 0.22
+  pH_heat_ref: 0.30
+  # --- temperature ---
+  temp_base: 38.75
+  temp_heat: 1.65
+  temp_vfa: 0.45
+  temp_vfa_ref: 0.55
+  temp_health: 0.85
+  temp_hydration: 0.45
+  # --- hydration ---
+  hydration_base: 0.93
+  hydration_heat: 0.42
+  # --- dry matter intake modifiers ---
+  dmi_heat_k: 0.42
+  dmi_hydration_k: 0.30
+  dmi_health_k: 0.35
+  dmi_pH_k: 0.45              # depressed intake at low pH
+  dmi_pH_ref: 5.95
+  # --- milk yield proxy ---
+  # Milk responds to *sustained* nutrient supply: intake is exponentially
+  # smoothed (half-life ~4 h) before entering the milk equation, otherwise the
+  # 15-min meal spikes would dominate a saturating response.
+  milk_intake_smoothing: 0.04
+  milk_intake_floor: 0.35
+  milk_intake_gain: 0.65
+  milk_health_k: 0.25
+  milk_pH_k: 0.30
+  milk_pH_ref: 5.90
+  milk_heat_k: 0.20
+  # --- health risk accumulator ---
+  health_up_acid: 0.030
+  health_up_lactate: 0.020
+  health_up_temp: 0.015
+  health_temp_ref: 40.0
+  health_down: 0.011
+  health_lactate_ref: 0.30
+
+# ---------------------------------------------------------------------
+# Thresholds used for physiology, metrics and rules
+# ---------------------------------------------------------------------
+thresholds:
+  low_pH: 5.80                # "SARA-like" working threshold
+  severe_low_pH: 5.50
+  target_pH: 6.40
+  sara_episode_min_minutes: 180   # >=3 h continuous below low_pH => 1 episode
+  recovery_target_pH: 6.20        # pH considered recovered
+  stability_pH_sigma: 0.38
+  stability_rum_ref: 5.20
+  stability_temp_ref: 38.90
+  stability_temp_sigma: 0.60
+  milk_reference: 31.0
+
+# ---------------------------------------------------------------------
+# Synthetic sensors
+# ---------------------------------------------------------------------
+sensors:
+  pH:
+    observable: true
+    noise_sd: 0.045
+    bias: 0.0
+    bias_drift_sd: 0.0
+    dropout_prob: 0.01
+    delay_steps: 0
+  temperature:
+    observable: true
+    noise_sd: 0.075
+    bias: 0.0
+    dropout_prob: 0.005
+    delay_steps: 0
+  rumination:
+    observable: true
+    noise_sd: 0.60
+    bias: 0.0
+    dropout_prob: 0.01
+    delay_steps: 0
+  dry_matter_intake:
+    observable: true
+    noise_sd: 0.022
+    bias: 0.0
+    dropout_prob: 0.01
+    delay_steps: 0
+  hydration_index:
+    observable: true
+    noise_sd: 0.030
+    bias: 0.0
+    dropout_prob: 0.01
+    delay_steps: 0
+  heat_load:
+    observable: true
+    noise_sd: 0.025
+    bias: 0.0
+    dropout_prob: 0.0
+    delay_steps: 0
+  milk_yield_proxy:
+    observable: true
+    noise_sd: 0.70
+    bias: 0.0
+    dropout_prob: 0.02
+    delay_steps: 0
+  # vfa_index, lactate_index and health_risk have NO sensor: they are
+  # permanently latent. This is the structural source of partial
+  # observability in the study.
+
+# ---------------------------------------------------------------------
+# State estimator
+# ---------------------------------------------------------------------
+estimator:
+  method: kalman            # one of: none | hold | ema | kalman
+  ema_alpha: 0.45
+  kalman:
+    process_var: 0.0022     # random-walk process variance for pH
+    meas_var: 0.0021        # ~ (0.045)^2
+    init_var: 0.04
+  trend_window: 4           # steps used for the pH trend feature
+  history_window: 24        # steps (=6 h) for recent-exposure features
+
+# ---------------------------------------------------------------------
+# Intervention / action space
+# ---------------------------------------------------------------------
+interventions:
+  0:
+    name: no_intervention
+    cost: 0.0
+    duration_steps: 0
+  1:
+    name: increase_forage_ratio
+    cost: 0.55
+    duration_steps: 24          # 6 h
+    forage_delta: 0.09
+  2:
+    name: reduce_concentrate
+    cost: 0.85
+    duration_steps: 16          # 4 h
+    concentrate_scale: 0.62
+  3:
+    name: administer_buffer
+    cost: 1.50
+    duration_steps: 12          # 3 h of active buffering
+    dose: 0.55
+    saturation_window: 16       # recent buffer doses cause diminishing returns
+    saturation_k: 0.85
+  4:
+    name: split_feeding
+    cost: 0.45
+    duration_steps: 20          # 5 h
+    meal_scale: 0.65
+    spread_factor: 1.8
+  5:
+    name: increase_observation_frequency
+    cost: 0.25
+    duration_steps: 12
+    dropout_scale: 0.25
+    noise_scale: 0.55
+  6:
+    name: trigger_alert
+    cost: 3.00
+    duration_steps: 24
+    cooldown_steps: 48
+    health_relief: 0.06
+    forage_delta: 0.06
+    buffer_dose: 0.30
+
+# ---------------------------------------------------------------------
+# Reward function (Section 8). All weights configurable.
+# ---------------------------------------------------------------------
+reward:
+  active_weights: default
+  weight_sets:
+    default:
+      w1_stability: 1.00
+      w2_milk: 0.30
+      w3_low_pH: 1.60
+      w4_severe_low_pH: 3.20
+      w4b_duration: 2.40        # penalty on *sustained* low-pH exposure
+      w5_intervention_cost: 0.22
+      w6_excessive_intervention: 0.55
+      w7_alert: 0.60
+    milk_focused:
+      w1_stability: 0.70
+      w2_milk: 0.90
+      w3_low_pH: 1.20
+      w4_severe_low_pH: 2.40
+      w4b_duration: 1.60
+      w5_intervention_cost: 0.22
+      w6_excessive_intervention: 0.55
+      w7_alert: 0.60
+    health_focused:
+      w1_stability: 1.30
+      w2_milk: 0.15
+      w3_low_pH: 2.60
+      w4_severe_low_pH: 5.00
+      w4b_duration: 4.00
+      w5_intervention_cost: 0.15
+      w6_excessive_intervention: 0.40
+      w7_alert: 0.45
+    cost_averse:
+      w1_stability: 1.00
+      w2_milk: 0.30
+      w3_low_pH: 1.60
+      w4_severe_low_pH: 3.20
+      w4b_duration: 2.40
+      w5_intervention_cost: 0.70
+      w6_excessive_intervention: 1.40
+      w7_alert: 1.50
+    cost_free:                  # used by Ablation 3
+      w1_stability: 1.00
+      w2_milk: 0.30
+      w3_low_pH: 1.60
+      w4_severe_low_pH: 3.20
+      w4b_duration: 2.40
+      w5_intervention_cost: 0.0
+      w6_excessive_intervention: 0.0
+      w7_alert: 0.0
+  excessive_intervention:
+    window_steps: 24            # 6 h
+    free_allowance: 5           # interventions per window with no extra penalty
+    quadratic: true
+    normaliser: 4.0             # divisor of the quadratic excess term
+  duration_penalty:
+    reference_steps: 24         # low-pH run length used to normalise the penalty
+    cap: 6.0                    # upper bound on the (run/reference)^2 term
+  scale: 0.10                   # global scaling to keep returns in a sane range
+
+# ---------------------------------------------------------------------
+# Expert rule-based controller (Baseline 2) — see src/rumen_twin/expert_rules.py
+# ---------------------------------------------------------------------
+expert_rules:
+  threshold_1: 6.05             # mild: increase forage
+  threshold_2: 5.85             # moderate: reduce concentrate
+  threshold_3: 5.70             # marked: administer buffer
+  threshold_severe: 5.50        # severe
+  persistent_low_steps: 12      # 3 h below threshold_1 -> escalate
+  alert_persistent_steps: 20    # 5 h below threshold_2 -> alert
+  buffer_cooldown_steps: 12
+  alert_cooldown_steps: 48
+  missing_pH_steps_for_obs_boost: 4
+  high_intake_dmi: 0.55         # kg DM/step considered a large meal
+  split_feed_pH: 6.15
+
+# ---------------------------------------------------------------------
+# Disturbance scenarios
+# ---------------------------------------------------------------------
+scenarios:
+  A_normal:
+    label: "A - Normal"
+    description: "Balanced ration, no significant disturbance."
+    family: baseline
+  B_high_concentrate:
+    label: "B - High concentrate"
+    description: "Sustained concentrate excess (forage ratio driven down)."
+    family: nutritional
+    forage_ratio: 0.36
+    onset_hour: 6.0
+    ramp_hours: 3.0
+  C_delayed_feeding:
+    label: "C - Delayed feeding"
+    description: "Meal delivered late, followed by compensatory over-eating."
+    family: management
+    delay_hours: 3.0
+    affected_meal: 1
+    rebound_factor: 1.75
+  D_heat_stress:
+    label: "D - Heat stress"
+    description: "Diurnal heat load with reduced intake and rumination."
+    family: environmental
+    peak_heat: 0.78
+    peak_hour: 15.0
+    width_hours: 6.0
+  E_gradual_sara:
+    label: "E - Gradual SARA-like"
+    description: "Progressively increasing acidogenic load (SARA-like simulated state)."
+    family: nutritional
+    forage_start: 0.58
+    forage_end: 0.33
+    meal_bolus: 1.25
+  F_sensor_dropout:
+    label: "F - Sensor dropout"
+    description: "pH sensor temporarily unavailable (blocks of missing data)."
+    family: sensor
+    block_prob: 0.05
+    block_len_steps: [8, 24]
+    base_disturbance: B_high_concentrate
+  G_sensor_noise:
+    label: "G - Sensor noise"
+    description: "Elevated random noise plus drifting systematic bias on pH."
+    family: sensor
+    noise_sd: 0.17
+    bias: -0.10
+    bias_drift_sd: 0.010
+    base_disturbance: B_high_concentrate
+  H_sensor_delay:
+    label: "H - Sensor delay"
+    description: "Observations delayed by 15-60 minutes."
+    family: sensor
+    delay_steps: [1, 4]
+    base_disturbance: B_high_concentrate
+  I_mixed:
+    label: "I - Mixed disturbance"
+    description: "High concentrate + heat stress + noisy pH sensor (held out from training)."
+    family: mixed
+    forage_ratio: 0.38
+    peak_heat: 0.70
+    noise_sd: 0.14
+    bias: -0.06
+  J_stress_test:
+    label: "J - Unseen stress test"
+    description: "Heat stress + delayed feeding + systematic sensor bias + delay (never seen in training)."
+    family: stress_test
+    peak_heat: 0.82
+    delay_hours: 4.0
+    rebound_factor: 1.9
+    bias: -0.18
+    noise_sd: 0.11
+    delay_steps: [2, 4]
+    forage_ratio: 0.44
+
+training_scenarios: [A_normal, B_high_concentrate, C_delayed_feeding, D_heat_stress,
+                     E_gradual_sara, F_sensor_dropout, G_sensor_noise, H_sensor_delay]
+evaluation_scenarios: [A_normal, B_high_concentrate, C_delayed_feeding, D_heat_stress,
+                       E_gradual_sara, F_sensor_dropout, G_sensor_noise, H_sensor_delay,
+                       I_mixed, J_stress_test]
+
+# ---------------------------------------------------------------------
+# RL training
+# ---------------------------------------------------------------------
+training:
+  n_envs: 8
+  ppo:
+    total_timesteps: 1500000
+    n_steps: 512
+    batch_size: 1024
+    learning_rate: 0.0003
+    gamma: 0.995
+    gae_lambda: 0.95
+    clip_range: 0.2
+    ent_coef: 0.006
+    vf_coef: 0.5
+    max_grad_norm: 0.5
+    n_epochs: 10
+    net_arch: [128, 128]
+  dqn:
+    total_timesteps: 600000
+    learning_rate: 0.0005
+    buffer_size: 200000
+    learning_starts: 5000
+    batch_size: 256
+    tau: 0.01
+    gamma: 0.995
+    train_freq: 4
+    gradient_steps: 1
+    target_update_interval: 1000
+    exploration_fraction: 0.25
+    exploration_final_eps: 0.04
+    net_arch: [128, 128]
+
+# ---------------------------------------------------------------------
+# Evaluation protocol
+# ---------------------------------------------------------------------
+evaluation:
+  episodes_per_condition: 180     # split across evaluation seeds
+  eval_seeds: [11, 22, 33]
+  controllers: [no_intervention, expert_rules, dqn, ppo]
+  bootstrap_resamples: 5000
+  ci_level: 0.95
+  # Metric 14 - an episode counts as a SUCCESS when all three hold:
+  success_criteria:
+    max_pct_time_below_low_pH: 10.0
+    max_severe_episodes: 0
+    max_final_health_risk: 0.30
+  # Metric 8 - pH must be held at/above recovery_target_pH for this many
+  # consecutive steps before an excursion counts as recovered.
+  recovery_confirm_steps: 4
+  # Metric 6 - a severe excursion must last at least this long to be an episode.
+  severe_episode_min_minutes: 60
+
+# ---------------------------------------------------------------------
+# Figures
+# ---------------------------------------------------------------------
+figures:
+  dpi: 300
+  formats: [png, pdf]
+  # Categorical palette validated for colour-vision deficiency on the
+  # all-pairs pairlist (worst CVD dE 9.2, worst normal-vision dE 16.3).
+  # Every figure additionally carries a second, non-colour channel
+  # (marker shape + line style) so identity never rests on hue alone.
+  style_palette:
+    no_intervention: "#4a3aa7"   # violet
+    expert_rules: "#2a78d6"      # blue
+    dqn: "#eb6834"               # orange
+    ppo: "#1baf7a"               # aqua
+  status_palette:
+    good: "#0ca30c"
+    warning: "#fab219"
+    serious: "#ec835a"
+    critical: "#d03b3b"
+  surface: "#fcfcfb"
+  text_primary: "#0b0b0b"
+  text_secondary: "#52514e"

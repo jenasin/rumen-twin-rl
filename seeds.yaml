@@ -1,0 +1,29 @@
+# =====================================================================
+# Reproducibility: every stochastic component draws from one of these
+# fixed seeds. Nothing in the pipeline uses an unseeded RNG.
+# =====================================================================
+master_seed: 20250916
+
+population:
+  cow_generation: 101       # individual cow parameter draws
+  split: 202                # train/validation/test partitioning
+
+training:
+  ppo_main: 3001
+  ppo_no_sensor_faults: 3002      # Ablation 1
+  ppo_no_cow_variability: 3003    # Ablation 2
+  ppo_no_cost_penalty: 3004       # Ablation 3
+  dqn_main: 4001
+  env_seed_offset: 900000         # per-worker env seeds = offset + rank
+
+evaluation:
+  seeds: [11, 22, 33]
+  episode_seed_offset: 500000     # episode seed = offset + f(scenario, seed, idx)
+
+sensitivity_analysis:
+  seed: 7001
+  episodes_per_condition: 60
+
+explainability:
+  seed: 8001
+  episode_index: 0

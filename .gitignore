@@ -1,0 +1,44 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+.pytest_cache/
+.DS_Store
+.vscode/
+.idea/
+
+# The per-episode records ARE tracked (~1.6 MB): they are the experimental
+# result, and with them a fresh clone regenerates every table, figure and the
+# manuscript in ~25 s via generate_results.py, without re-running the
+# experiments or retraining anything.
+results/processed/*
+!results/processed/.gitkeep
+
+# Everything below is cheaply regenerated from results/raw, so it is not tracked:
+#   figures/ + tables/  -> generate_results.py   (~25 s)
+#   models/             -> run_experiments.py --stage train   (~20 min)
+figures/*
+!figures/.gitkeep
+tables/*
+!tables/.gitkeep
+models/*
+!models/.gitkeep
+logs/*
+!logs/.gitkeep
+tb/
+
+# Manuscript and conference submission are kept OUT of this public repository
+# until the paper is published. They live on disk and are rebuilt with
+# `python scripts/build_paper.py` / `python paper_madrid/build_submission.py`.
+paper/
+paper_madrid/
+# macOS/Finder duplicate-name artefacts ("submission 2", "file 3.png", ...)
+* [0-9]
+* [0-9].*
+*/* [0-9]/
