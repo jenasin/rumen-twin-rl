@@ -248,6 +248,11 @@ line style or hatch) so identity never rests on hue alone.
 
 ## Licence and citation
 
-Research code released for reproducibility. A manuscript describing this work is
-in preparation; until it appears, please cite this repository and keep the
-synthetic-simulation disclaimer intact.
+Released under the **MIT Licence** (see `LICENSE`) — free to use, modify and
+redistribute, including commercially, provided the copyright notice is kept.
+This covers the raw evaluation records in `results/raw/` as well as the code.
+
+A manuscript describing this work is in preparation; until it appears, please
+cite this repository. Whatever you build on it, **keep the synthetic-simulation
+disclaimer intact**: this model is uncalibrated, it is not validated against any
+animal data, and it must not be presented as a veterinary decision tool.
